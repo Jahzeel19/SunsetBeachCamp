@@ -207,7 +207,11 @@ function tarjetaActividad(a, comoAdmin){
   if(g.estado==='esperando'){
     cuerpo = `<p class="muted">Se podrá abrir cuando el admin inicie el recorrido.</p>`;
   } else if(st==='bloqueada'){
-    cuerpo = siguientePorAbrir()?.id===a.id
+    const turno = siguientePorAbrir()?.id===a.id;
+    cuerpo = turno && !yaEsSuDia(a.id)
+      ? `<p class="muted">${I.lock} Está programada para el ${esc(etiquetaDia(diaDe(a.id)))}${g.fechaInicio ? '' : ' (el admin todavía no pone la fecha)'}. Se podrá abrir ese día.</p>
+         <button class="btn btn-terra" disabled>${I.lock} Abrir actividad</button>`
+      : turno
       ? `<p>Ya es tu turno. Al abrirla, los turistas la verán a color y podrán entrar.</p>
          <button class="btn btn-terra" data-act="abrir" data-id="${a.id}" ${dis()}>${I.play} Abrir actividad</button>`
       : `<p class="muted">${I.lock} Se abre cuando termine ${esc(prev ? prev.nombre : 'la anterior')}.</p>`;
@@ -226,7 +230,8 @@ function tarjetaActividad(a, comoAdmin){
             <button class="btn btn-ghost btn-sm" data-act="terminar-no">Cancelar</button></div>`
         : `<button class="btn btn-ghost" data-act="terminar" data-id="${a.id}">Terminar actividad</button>`}`;
   } else {
-    cuerpo = `<p class="muted">${I.check} Terminada · ${parts.filter(p=>p.sellado).length} ${parts.filter(p=>p.sellado).length===1?'turista sellado':'turistas sellados'}.</p>`;
+    const dr = duracionReal(a.id);
+    cuerpo = `<p class="muted">${I.check} Terminada · ${parts.filter(p=>p.sellado).length} ${parts.filter(p=>p.sellado).length===1?'turista sellado':'turistas sellados'}${dr ? ` · duró ${esc(dr)}` : ''}.</p>`;
   }
 
   return `<section class="panel mi-act">
@@ -529,7 +534,9 @@ function vDetalle(a){
       <div class="det-grid">
         <div class="sec"><h3>${I.target} Objetivo</h3><p>${esc(a.obj)}</p></div>
         <div class="sec"><h3>${I.hourglass} Duración</h3>
-          ${st==='abierta' ? `<span class="timer" id="timer">00:00:00</span> <span class="meta">de ${esc(duracion(a))}</span>` : `<p>${esc(duracion(a))}</p>`}</div>
+          ${st==='abierta' ? `<span class="timer" id="timer">00:00:00</span> <span class="meta">programada: ${esc(duracion(a))}</span>`
+            : st==='completada' && duracionReal(a.id) ? `<p>Duró ${esc(duracionReal(a.id))} <span class="meta">(programada: ${esc(duracion(a))})</span></p>`
+            : `<p>${esc(duracion(a))}</p>`}</div>
         <div class="sec"><h3>${I.text} Descripción</h3><p class="desc">${esc(a.desc)}</p><p class="meta" style="margin-top:4px">${a.lugar ? `${I.pin}${esc(a.lugar)} · ` : ''}${I.guide}${esc(S.acts[a.id]?.guiaNombre || '')}</p></div>
         ${a.pasos.length ? `<div class="sec"><h3>${I.list} Instrucciones</h3><ol class="tight">${a.pasos.map(p=>`<li>${esc(p)}</li>`).join('')}</ol></div>` : ''}
         ${a.mat ? `<div class="sec"><h3>${I.box} Materiales</h3><p>${esc(a.mat)}</p></div>` : ''}

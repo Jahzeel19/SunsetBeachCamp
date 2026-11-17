@@ -96,6 +96,23 @@ function etiquetaDia(d, corto){
   return `Día ${d} · ${txt}`;
 }
 
+/* ¿Ya llegó la fecha programada de la actividad? (usa la fecha del celular del guía;
+   la base también lo revisa en abrir_actividad, así que no se puede saltar) */
+function yaEsSuDia(id){
+  const d = diaDe(id), f = fechaDelDia(d);
+  if (!f) return d === 1;                       // sin fecha: solo el día 1 se puede abrir
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  return hoy >= f;
+}
+
+/* Tiempo real que duró una actividad: de que se abrió a que el guía la terminó */
+function duracionReal(id){
+  const x = S.acts[id]; if (!x?.abiertaEn || !x?.completadaEn) return '';
+  const min = Math.max(0, Math.round((x.completadaEn - x.abiertaEn) / 60000));
+  const h = Math.floor(min / 60), m = min % 60;
+  return h ? `${h} h${m ? ` ${m} min` : ''}` : `${m} min`;
+}
+
 /* La siguiente actividad que toca abrir (orden fijo) */
 function siguientePorAbrir(){
   if (ACTS.some(a => estado(a.id)==='abierta')) return null;
@@ -191,7 +208,7 @@ async function leerEstado(){
   ]);
 
   gact.forEach(r => {
-    N.acts[r.actividad_id] = { estado:r.estado, guiaId:r.guia_id, guiaNombre:r.guia?.nombre || '', abiertaEn:ms(r.abierta_en), dia:r.dia || 1 };
+    N.acts[r.actividad_id] = { estado:r.estado, guiaId:r.guia_id, guiaNombre:r.guia?.nombre || '', abiertaEn:ms(r.abierta_en), completadaEn:ms(r.completada_en), dia:r.dia || 1 };
   });
   N.guias = gg.map(r => ({ id:r.guia_id, nombre:r.perfil?.nombre || 'Guía' }));
 
