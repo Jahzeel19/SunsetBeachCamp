@@ -474,7 +474,9 @@ function vRuta(){
       <p class="desc corta">${esc(a.desc)}</p>
       ${bloqueEntrar(a)}
       <button class="btn btn-ghost" data-act="detail" data-id="${a.id}">Ver actividad ${I.arrow}</button>
-    </section>` : `<p class="muted" style="text-align:center">Esperando que el guía abra la siguiente experiencia.</p>`}
+    </section>` : completoTodo()
+      ? `<p class="final-msg">¡Felicidades! Juntaste tus ${ACTS.length} insignias.</p>${btnReconocimiento()}`
+      : `<p class="muted" style="text-align:center">Esperando que el guía abra la siguiente experiencia.</p>`}
   </main>${hills}${band}`;
 }
 
