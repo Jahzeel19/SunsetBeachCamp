@@ -486,6 +486,7 @@ function vPasaporte(){
     <p style="text-align:center;font-weight:700">${n} de ${total} insignias</p>
     <div class="pass">${ACTS.map(a=>{ const v = vistaTurista(a.id); return `<div>${badge(a, v!=='sellada', 96)}
       <b>${esc(a.nombre)}</b><span class="meta">${v==='sellada'?'Sello: '+esc(a.sello):v==='perdida'?'No participaste':v==='bloqueada'?'Pendiente':'En curso'}</span></div>`; }).join('')}</div>
+    ${btnReconocimiento()}
     <p class="leaf">${I.ecoleaf} Recorrido digital · Menos papel</p>
   </main>${band}`;
 }
@@ -515,6 +516,7 @@ function vFinal(){
     <div><h2 class="screen-title">Recorrido finalizado</h2>${zig}</div>
     <div class="pass">${ACTS.map(a=>{ const ok = vistaTurista(a.id)==='sellada'; return `<div>${badge(a,!ok,92)}<b>${esc(a.nombre)}</b><span class="meta">${ok?'Sellada':'Sin sello'}</span></div>`; }).join('')}</div>
     <p class="final-msg">${n===total ? `¡Felicidades! Juntaste tus ${total} insignias.` : `Juntaste ${n} de ${total} insignias.`}<br>Gracias por recorrer ${esc(S.grupo.nombre)}.</p>
+    ${btnReconocimiento()}
     <p class="leaf">${I.ecoleaf} Recorrido digital · Menos papel</p>
     <button class="btn btn-ghost" data-act="leave" ${dis()}>Salir del recorrido</button>
   </main>${band}`;
@@ -614,6 +616,127 @@ function vModal(){
     <div class="rate">${opts.map(([t,e])=>`<button data-act="rate" data-id="${t}" aria-pressed="${ui.rating===t}">${e}${t}</button>`).join('')}</div>
     <button class="btn btn-terra" data-act="ack" data-id="${pend.id}" ${ui.rating && !ui.busy ?'':'disabled'}>Listo</button>
   </div></div>`;
+}
+
+/* ---------- Reconocimiento (PNG) ---------- */
+/* Solo se puede descargar cuando el turista tiene sellos de todas las actividades */
+const completoTodo = () => ACTS.length > 0 && misSellos() === ACTS.length;
+const btnReconocimiento = () => completoTodo()
+  ? `<button class="btn btn-teal" data-act="reconocimiento" ${dis()}>${fa('download')} Descargar mi reconocimiento</button>` : '';
+
+function cargarImg(src){
+  return new Promise(ok => { const im = new Image(); im.onload = () => ok(im); im.onerror = () => ok(null); im.src = src; });
+}
+/* El ícono de Font Awesome (svg) convertido en imagen, para las actividades sin insignia */
+function iconoImg(a){
+  const svg = I[a.icon] || I.medal;
+  if (!/^<svg/i.test(svg)) return Promise.resolve(null);
+  let s = svg.replace(/currentColor/g, a.c).replace(/<svg/i, '<svg width="200" height="200"');
+  if (!/xmlns=/.test(s)) s = s.replace(/<svg/i, '<svg xmlns="http://www.w3.org/2000/svg"');
+  return cargarImg('data:image/svg+xml;charset=utf-8,' + encodeURIComponent(s));
+}
+/* Texto que se encoge hasta caber en maxW */
+function textoAjustado(ctx, txt, x, y, maxW, peso, tam, familia){
+  let t = tam;
+  do { ctx.font = `${peso} ${t}px ${familia}`; t -= 2; } while (ctx.measureText(txt).width > maxW && t > 20);
+  ctx.fillText(txt, x, y);
+}
+/* "26 y 27 de noviembre de 2026" */
+function fechasRecorrido(){
+  const d1 = fechaDelDia(1), d2 = fechaDelDia(2); if (!d1) return '';
+  const mes = d => d.toLocaleDateString('es-MX', { month:'long' });
+  return d1.getMonth() === d2.getMonth()
+    ? `${d1.getDate()} y ${d2.getDate()} de ${mes(d2)} de ${d2.getFullYear()}`
+    : `${d1.getDate()} de ${mes(d1)} y ${d2.getDate()} de ${mes(d2)} de ${d2.getFullYear()}`;
+}
+
+async function generarReconocimiento(){
+  const W = 2000, H = 1414;                         // horizontal, proporción carta/A4
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d');
+  const DISP = '"Rubik", system-ui, sans-serif', BODY = '"Nunito Sans", system-ui, sans-serif';
+  const C = { cream:'#f7f0e3', card:'#fffaf1', ink:'#2e2118', muted:'#7d6a5a', terra:'#d8644a', teal:'#1f5b5d', gold:'#cf9a3f', cafe:'#3b2a1e', cobre:'#c9774f' };
+
+  // Que las letras de la app ya estén cargadas antes de dibujar
+  try { await Promise.all(['800 90px Rubik','700 90px Rubik','600 30px Rubik','400 30px "Nunito Sans"','700 30px "Nunito Sans"'].map(f => document.fonts.load(f))); } catch(e) {}
+  const [logo, ...imgs] = await Promise.all([cargarImg('assets/logo.webp'), ...ACTS.map(a => a.insignia ? cargarImg(a.insignia) : iconoImg(a))]);
+
+  // Fondo y marco doble
+  ctx.fillStyle = C.cream; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = C.card; ctx.fillRect(50, 50, W-100, H-100);
+  ctx.strokeStyle = C.cafe; ctx.lineWidth = 6; ctx.strokeRect(50, 50, W-100, H-100);
+  ctx.strokeStyle = C.gold; ctx.lineWidth = 2; ctx.strokeRect(68, 68, W-136, H-136);
+
+  // Banda de rombos arriba y abajo (la misma de la app)
+  const rombo = (cx, cy, r, color) => { ctx.fillStyle = color; ctx.beginPath(); ctx.moveTo(cx, cy-r); ctx.lineTo(cx+r, cy); ctx.lineTo(cx, cy+r); ctx.lineTo(cx-r, cy); ctx.closePath(); ctx.fill(); };
+  const banda = y => {
+    for (let x = 100; x <= W-100; x += 44) {
+      rombo(x, y, 10, C.cafe); rombo(x, y, 5, C.gold);
+      if (x + 22 <= W-100) { rombo(x+22, y, 8, C.cobre); ctx.fillStyle = C.card; ctx.beginPath(); ctx.arc(x+22, y, 2.4, 0, Math.PI*2); ctx.fill(); }
+    }
+  };
+  banda(100); banda(H-100);
+
+  ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+  if (logo) ctx.drawImage(logo, W/2 - 125, 135, 250, 250);
+
+  // Título
+  ctx.fillStyle = C.ink; ctx.font = `800 92px ${DISP}`;
+  try { ctx.letterSpacing = '10px'; } catch(e) {}
+  ctx.fillText('RECONOCIMIENTO', W/2, 485);
+  try { ctx.letterSpacing = '0px'; } catch(e) {}
+  [C.cafe, C.gold, C.teal, C.cobre].forEach((c, i, arr) => { for (let k = -5; k <= 5; k++) if ((k + 5) % 4 === i) rombo(W/2 + k*26, 520, 8, c); });
+
+  ctx.fillStyle = C.muted; ctx.font = `400 36px ${BODY}`;
+  ctx.fillText('Se otorga el presente reconocimiento a', W/2, 600);
+
+  // Nombre de la persona
+  ctx.fillStyle = C.terra;
+  textoAjustado(ctx, S.me?.nombre || 'Turista', W/2, 710, 1500, 700, 110, DISP);
+  ctx.strokeStyle = C.gold; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(W/2 - 520, 745); ctx.lineTo(W/2 + 520, 745); ctx.stroke();
+
+  ctx.fillStyle = C.ink; ctx.font = `400 36px ${BODY}`;
+  ctx.fillText(`por completar las ${ACTS.length} experiencias del recorrido Sunset Beach Camp`, W/2, 810);
+
+  // Insignias de las actividades
+  const r = 82, paso = Math.min(330, (W - 300) / ACTS.length), x0 = W/2 - paso * (ACTS.length - 1) / 2, cy = 965;
+  ACTS.forEach((a, i) => {
+    const cx = x0 + i * paso, im = imgs[i];
+    ctx.save();
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.fillStyle = a.insignia ? '#fff' : a.c + '22'; ctx.fill(); ctx.clip();
+    if (im) a.insignia ? ctx.drawImage(im, cx - r, cy - r, r*2, r*2) : ctx.drawImage(im, cx - r*.48, cy - r*.48, r*.96, r*.96);
+    ctx.restore();
+    ctx.strokeStyle = a.c; ctx.lineWidth = 7; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.stroke();
+    ctx.fillStyle = C.ink;   textoAjustado(ctx, a.nombre, cx, cy + r + 52, paso - 20, 600, 30, DISP);
+    ctx.fillStyle = C.muted; textoAjustado(ctx, `Sello: ${a.sello || ''}`, cx, cy + r + 88, paso - 20, 400, 24, BODY);
+  });
+
+  // Lugar, fecha y grupo
+  const f = fechasRecorrido();
+  ctx.fillStyle = C.teal; ctx.font = `700 30px ${BODY}`;
+  ctx.fillText(`Bahía de Matanchén, San Blas, Nayarit${f ? ' · ' + f : ''}`, W/2, 1235);
+  ctx.fillStyle = C.muted; ctx.font = `400 26px ${BODY}`;
+  ctx.fillText(`${S.grupo?.nombre || ''} · Recorrido digital · Menos papel`, W/2, 1280);
+
+  return cv;
+}
+
+async function descargarReconocimiento(){
+  if (!completoTodo()) { toast('Junta todas las insignias para descargar tu reconocimiento.'); return; }
+  ui.busy = true; render();
+  try {
+    const cv = await generarReconocimiento();
+    const blob = await new Promise(ok => cv.toBlob(ok, 'image/png'));
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Reconocimiento-SunsetBeachCamp-${(S.me?.nombre || 'turista').trim().replace(/[^\p{L}\p{N}]+/gu, '-')}.png`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    toast('Reconocimiento descargado');
+  } catch(e) {
+    console.error(e); toast('No se pudo generar el reconocimiento.');
+  } finally { ui.busy = false; render(); }
 }
 
 /* ---------- Render ---------- */
@@ -738,6 +861,7 @@ document.addEventListener('click', e=>{
     case 'terminar-si':  ui.confirmTerm = null; run(()=>terminarActividad(id), `${actById(id).nombre} terminada`); return;
     case 'entrar':       run(()=>entrarActividad(id), 'Entraste a la actividad'); return;
     case 'leave':        preguntar('leave'); return;
+    case 'reconocimiento': descargarReconocimiento(); return;
     case 'menu':          ui.menu = !ui.menu; break;
     case 'borrar-cuenta': ui.menu = false; render(); preguntar('cuenta'); return;
     case 'confirm-yes': { const tipo = ui.confirmar; ui.confirmar = null; confirmado(tipo); return; }
