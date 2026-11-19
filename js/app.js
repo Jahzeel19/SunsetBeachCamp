@@ -330,6 +330,7 @@ function vGuia(){
     ${g.estado==='esperando' ? `<div class="status wait"><span class="dot"></span>Esperando el inicio del recorrido</div>`
       : g.estado==='en_curso' ? `<div class="status live"><span class="dot"></span>Recorrido en curso · ${n} de ${total} terminadas</div>`
       : `<div class="status done"><span class="dot"></span>Recorrido finalizado</div>`}
+    ${btnReconocimiento()}
 
     <div class="guia-grid">
       <section class="panel">
@@ -622,7 +623,9 @@ function vModal(){
 
 /* ---------- Reconocimiento (PNG) ---------- */
 /* Solo se puede descargar cuando el turista tiene sellos de todas las actividades */
-const completoTodo = () => ACTS.length > 0 && misSellos() === ACTS.length;
+/* Turista: con sellos de todas. Guía: cuando todas las actividades del recorrido están terminadas */
+const esGuia = () => S.me?.rol === 'guia';
+const completoTodo = () => ACTS.length > 0 && (esGuia() ? terminadas() === ACTS.length : misSellos() === ACTS.length);
 const btnReconocimiento = () => completoTodo()
   ? `<button class="btn btn-teal" data-act="reconocimiento" ${dis()}>${fa('download')} Descargar mi reconocimiento</button>` : '';
 
@@ -698,7 +701,7 @@ async function generarReconocimiento(){
   ctx.strokeStyle = C.gold; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(W/2 - 520, 745); ctx.lineTo(W/2 + 520, 745); ctx.stroke();
 
   ctx.fillStyle = C.ink; ctx.font = `400 36px ${BODY}`;
-  ctx.fillText(`por completar las ${ACTS.length} experiencias del recorrido Sunset Beach Camp`, W/2, 810);
+  ctx.fillText(`por completar las ${ACTS.length} experiencias del recorrido Sunset Beach Camp${esGuia() ? ' como guía' : ''}`, W/2, 810);
 
   // Insignias de las actividades
   const r = 82, paso = Math.min(330, (W - 300) / ACTS.length), x0 = W/2 - paso * (ACTS.length - 1) / 2, cy = 965;
@@ -710,7 +713,7 @@ async function generarReconocimiento(){
     ctx.restore();
     ctx.strokeStyle = a.c; ctx.lineWidth = 7; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.stroke();
     ctx.fillStyle = C.ink;   textoAjustado(ctx, a.nombre, cx, cy + r + 52, paso - 20, 600, 30, DISP);
-    ctx.fillStyle = C.muted; textoAjustado(ctx, `Sello: ${a.sello || ''}`, cx, cy + r + 88, paso - 20, 400, 24, BODY);
+    ctx.fillStyle = C.muted; textoAjustado(ctx, esGuia() ? `Guía: ${S.acts[a.id]?.guiaNombre || '—'}` : `Sello: ${a.sello || ''}`, cx, cy + r + 88, paso - 20, 400, 24, BODY);
   });
 
   // Lugar, fecha y grupo
@@ -724,7 +727,7 @@ async function generarReconocimiento(){
 }
 
 async function descargarReconocimiento(){
-  if (!completoTodo()) { toast('Junta todas las insignias para descargar tu reconocimiento.'); return; }
+  if (!completoTodo()) { toast(esGuia() ? 'Se podrá descargar cuando terminen todas las actividades.' : 'Junta todas las insignias para descargar tu reconocimiento.'); return; }
   ui.busy = true; render();
   try {
     const cv = await generarReconocimiento();
@@ -732,7 +735,7 @@ async function descargarReconocimiento(){
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Reconocimiento-SunsetBeachCamp-${(S.me?.nombre || 'turista').trim().replace(/[^\p{L}\p{N}]+/gu, '-')}.png`;
+    a.download = `Reconocimiento-${esGuia() ? 'Guia-' : ''}SunsetBeachCamp-${(S.me?.nombre || 'turista').trim().replace(/[^\p{L}\p{N}]+/gu, '-')}.png`;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 4000);
     toast('Reconocimiento descargado');
